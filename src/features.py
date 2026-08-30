@@ -1,7 +1,8 @@
 """
-Feature Engineering Module for Gold Price Prediction.
-Generates technical indicators, inter-market ratios, momentum & volatility features,
-and time-lagged predictors without lookahead bias.
+Feature Engineering Module for Indian Gold Price Prediction.
+Generates technical indicators for GOLDBEES (NSE) and Domestic Spot Gold (₹/10g),
+intermarket ratios with NIFTY 50, SENSEX, USD/INR, Crude Oil, India VIX,
+and non-lookahead lagged predictors.
 """
 
 import os
@@ -14,19 +15,19 @@ from ta.volume import OnBalanceVolumeIndicator
 
 PROCESSED_DATA_PATH = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'data', 'processed', 'gold_features.csv'
+    'data', 'processed', 'indian_gold_features.csv'
 )
 
 
-def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
+def compute_indian_technical_indicators(df: pd.DataFrame, target_col: str = 'GOLDBEES') -> pd.DataFrame:
     """
-    Computes comprehensive technical indicators for GLD.
+    Computes comprehensive technical indicators for Indian Gold asset.
     """
     data = df.copy()
-    close = data['GLD']
-    high = data['GLD_High'] if 'GLD_High' in data.columns else close
-    low = data['GLD_Low'] if 'GLD_Low' in data.columns else close
-    volume = data['GLD_Volume'] if 'GLD_Volume' in data.columns else pd.Series(1, index=data.index)
+    close = data[target_col]
+    high = data[f'{target_col}_High'] if f'{target_col}_High' in data.columns else close
+    low = data[f'{target_col}_Low'] if f'{target_col}_Low' in data.columns else close
+    volume = data[f'{target_col}_Volume'] if f'{target_col}_Volume' in data.columns else pd.Series(1, index=data.index)
     
     # 1. Moving Averages
     data['SMA_7'] = SMAIndicator(close=close, window=7).sma_indicator()
@@ -37,7 +38,7 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     data['EMA_12'] = EMAIndicator(close=close, window=12).ema_indicator()
     data['EMA_26'] = EMAIndicator(close=close, window=26).ema_indicator()
     
-    # Trend Cross Signals
+    # Moving Average Distance and Golden Cross
     data['SMA_Dist_50'] = (close - data['SMA_50']) / data['SMA_50']
     data['SMA_Dist_200'] = (close - data['SMA_200']) / data['SMA_200']
     data['Golden_Cross'] = (data['SMA_50'] > data['SMA_200']).astype(int)
@@ -66,8 +67,8 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     atr = AverageTrueRange(high=high, low=low, close=close, window=14)
     data['ATR_14'] = atr.average_true_range()
     
-    # 5. Volume (if available)
-    if 'GLD_Volume' in data.columns and (data['GLD_Volume'] > 0).any():
+    # 5. Volume Indicators
+    if f'{target_col}_Volume' in data.columns and (data[f'{target_col}_Volume'] > 0).any():
         obv = OnBalanceVolumeIndicator(close=close, volume=volume)
         data['OBV'] = obv.on_balance_volume()
         data['OBV_SMA_20'] = data['OBV'].rolling(20).mean()
@@ -75,97 +76,86 @@ def compute_technical_indicators(df: pd.DataFrame) -> pd.DataFrame:
     return data
 
 
-def compute_intermarket_features(df: pd.DataFrame) -> pd.DataFrame:
+def compute_indian_macro_features(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Computes cross-asset ratios, relative performance, and macro interactions.
+    Computes intermarket ratios and macro correlations tailored for the Indian financial ecosystem.
     """
     data = df.copy()
     
-    # Intermarket Ratios
-    if 'SLV' in data.columns:
-        data['Gold_Silver_Ratio'] = data['GLD'] / data['SLV']
-    if 'USO' in data.columns:
-        data['Gold_Oil_Ratio'] = data['GLD'] / data['USO']
-    if 'SPX' in data.columns:
-        data['Gold_SPX_Ratio'] = data['GLD'] / data['SPX']
-    if 'DXY' in data.columns:
-        data['Gold_DXY_Ratio'] = data['GLD'] / data['DXY']
+    # Domestic Ratios
+    if 'GOLDBEES' in data.columns and 'NIFTY50' in data.columns:
+        data['Gold_Nifty_Ratio'] = data['GOLDBEES'] / data['NIFTY50']
+    if 'GOLDBEES' in data.columns and 'SENSEX' in data.columns:
+        data['Gold_Sensex_Ratio'] = data['GOLDBEES'] / data['SENSEX']
+    if 'GOLDBEES' in data.columns and 'USDINR' in data.columns:
+        data['Gold_USDINR_Ratio'] = data['GOLDBEES'] / data['USDINR']
+    if 'GOLD_INR_10G' in data.columns and 'SILVER_INR_1KG' in data.columns:
+        data['Gold_Silver_Ratio_INR'] = data['GOLD_INR_10G'] / (data['SILVER_INR_1KG'] / 100.0)
         
-    # Real Yield Proxy
-    if 'TNX' in data.columns and 'TIP' in data.columns:
-        data['Real_Yield_Proxy'] = data['TNX'] - data['TIP'].pct_change(252) * 100
-        
-    # Daily Returns
-    asset_cols = ['GLD', 'SPX', 'USO', 'SLV', 'EURUSD', 'DXY', 'TNX', 'VIX', 'TIP']
-    for col in asset_cols:
-        if col in data.columns:
-            data[f'{col}_Ret_1d'] = data[col].pct_change(1)
-            data[f'{col}_Ret_5d'] = data[col].pct_change(5)
-            data[f'{col}_Ret_21d'] = data[col].pct_change(21)
-            data[f'{col}_Vol_21d'] = data[f'{col}_Ret_1d'].rolling(21).std() * np.sqrt(252)
+    # Asset Returns and Rolling Volatilities
+    assets = ['GOLDBEES', 'GOLD_INR_10G', 'USDINR', 'NIFTY50', 'SENSEX', 'INDIA_VIX', 'GC_F', 'SILVER', 'CRUDE_OIL', 'DXY']
+    for asset in assets:
+        if asset in data.columns:
+            data[f'{asset}_Ret_1d'] = data[asset].pct_change(1)
+            data[f'{asset}_Ret_5d'] = data[asset].pct_change(5)
+            data[f'{asset}_Ret_21d'] = data[asset].pct_change(21)
+            data[f'{asset}_Vol_21d'] = data[f'{asset}_Ret_1d'].rolling(21).std() * np.sqrt(252)
             
     return data
 
 
-def create_lag_features(df: pd.DataFrame, target_col: str = 'GLD', lags: list = [1, 2, 3, 5, 10, 21]) -> pd.DataFrame:
+def create_indian_lag_features(df: pd.DataFrame, target_col: str = 'GOLDBEES', lags: list = [1, 2, 3, 5, 10, 21]) -> pd.DataFrame:
     """
-    Creates lagged observations to enable pure time-series forecasting without lookahead bias.
+    Creates lagged observations to eliminate lookahead bias.
     """
     data = df.copy()
-    
-    # Lag primary target price and returns
     for lag in lags:
         data[f'{target_col}_Lag_{lag}'] = data[target_col].shift(lag)
-        data[f'{target_col}_Ret_Lag_{lag}'] = data[f'{target_col}_Ret_1d'].shift(lag) if f'{target_col}_Ret_1d' in data.columns else data[target_col].pct_change().shift(lag)
-        
-    # Lag key external macro features by 1 day (so t prediction uses t-1 exogenous close)
-    macro_features = ['SPX_Ret_1d', 'USO_Ret_1d', 'SLV_Ret_1d', 'DXY_Ret_1d', 'VIX_Ret_1d', 'RSI_14', 'MACD', 'BB_Pct_B']
-    for feat in macro_features:
+        if f'{target_col}_Ret_1d' in data.columns:
+            data[f'{target_col}_Ret_Lag_{lag}'] = data[f'{target_col}_Ret_1d'].shift(lag)
+            
+    macro_lags = ['USDINR_Ret_1d', 'NIFTY50_Ret_1d', 'SENSEX_Ret_1d', 'INDIA_VIX_Ret_1d', 'CRUDE_OIL_Ret_1d', 'RSI_14', 'MACD', 'BB_Pct_B']
+    for feat in macro_lags:
         if feat in data.columns:
             data[f'{feat}_Lag_1'] = data[feat].shift(1)
             
     return data
 
 
-def construct_target_variables(df: pd.DataFrame, target_col: str = 'GLD') -> pd.DataFrame:
+def construct_indian_target_variables(df: pd.DataFrame, target_col: str = 'GOLDBEES') -> pd.DataFrame:
     """
-    Constructs clean forward-looking targets:
-    - Target_Next_Close: Gold Price at t+1
-    - Target_Next_Return: Log return at t+1
-    - Target_Next_Direction: Binary 1 (Up) / 0 (Down) at t+1
+    Constructs forward-looking targets for Indian Gold forecasting.
     """
     data = df.copy()
     data['Target_Next_Close'] = data[target_col].shift(-1)
     data['Target_Next_Return'] = np.log(data[target_col].shift(-1) / data[target_col])
     data['Target_Next_Direction'] = (data['Target_Next_Close'] > data[target_col]).astype(int)
     
-    # Multi-step targets for direct forecasting horizons
-    for h in [5, 10, 21]:
-        data[f'Target_Next_Close_{h}d'] = data[target_col].shift(-h)
+    # 10g Gold target parallel construction
+    if 'GOLD_INR_10G' in data.columns:
+        data['Target_Next_Close_10G'] = data['GOLD_INR_10G'].shift(-1)
         
     return data
 
 
-def prepare_full_features(df: pd.DataFrame, save: bool = True) -> pd.DataFrame:
+def prepare_full_features(df: pd.DataFrame, target_col: str = 'GOLDBEES', save: bool = True) -> pd.DataFrame:
     """
-    Orchestrates full feature engineering pipeline.
+    Orchestrates the full Indian market feature engineering pipeline.
     """
-    print("[Info] Computing Technical Indicators...")
-    featured = compute_technical_indicators(df)
+    print(f"[Info] Computing Technical Indicators for {target_col}...")
+    featured = compute_indian_technical_indicators(df, target_col=target_col)
     
-    print("[Info] Computing Intermarket & Macro Ratios...")
-    featured = compute_intermarket_features(featured)
+    print("[Info] Computing Indian Intermarket Macro Features (NIFTY, SENSEX, USDINR, VIX)...")
+    featured = compute_indian_macro_features(featured)
     
     print("[Info] Creating Non-Lookahead Lagged Features...")
-    featured = create_lag_features(featured)
+    featured = create_indian_lag_features(featured, target_col=target_col)
     
-    print("[Info] Constructing Target Variables...")
-    featured = construct_target_variables(featured)
+    print("[Info] Constructing Forward Targets...")
+    featured = construct_indian_target_variables(featured, target_col=target_col)
     
-    # Drop warm-up rows (from 200-day moving average and lags) and the last rows where future target is NaN
-    initial_shape = featured.shape
     clean_df = featured.dropna().copy()
-    print(f"[Success] Feature matrix ready: {clean_df.shape} (from {initial_shape} raw rows)")
+    print(f"[Success] Indian Feature Matrix ready: {clean_df.shape}")
     
     if save:
         os.makedirs(os.path.dirname(PROCESSED_DATA_PATH), exist_ok=True)
@@ -176,8 +166,8 @@ def prepare_full_features(df: pd.DataFrame, save: bool = True) -> pd.DataFrame:
 
 
 if __name__ == '__main__':
-    from data_loader import download_all_market_data
-    raw = download_all_market_data()
+    from data_loader import download_indian_market_data
+    raw = download_indian_market_data()
     features = prepare_full_features(raw)
     print("\nFeature Columns Sample (First 20):", list(features.columns[:20]))
     print("Total features:", len(features.columns))

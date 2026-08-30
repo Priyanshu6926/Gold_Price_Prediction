@@ -1,7 +1,6 @@
 """
-Training and Walk-Forward Validation Engine for Gold Price Prediction.
-Performs strict time-series cross validation without lookahead leakage,
-evaluates multiple models, and exports serialized production models.
+Training and Walk-Forward Validation Engine for Indian Gold Market Prediction.
+Evaluates models across NSE GOLDBEES and Domestic Spot Gold in INR.
 """
 
 import os
@@ -29,7 +28,7 @@ if CURR_DIR not in sys.path:
     sys.path.insert(0, CURR_DIR)
 
 from features import PROCESSED_DATA_PATH, prepare_full_features
-from data_loader import download_all_market_data
+from data_loader import download_indian_market_data
 from models import get_model_instances, StackingEnsemble, PyTorchLSTM, create_sequences
 
 MODELS_DIR = os.path.join(os.path.dirname(CURR_DIR), 'models')
@@ -47,7 +46,7 @@ def calculate_directional_accuracy(y_true: np.ndarray, y_pred: np.ndarray, y_lag
 
 def evaluate_predictions(y_true: np.ndarray, y_pred: np.ndarray, y_lag: np.ndarray) -> dict:
     """
-    Computes a comprehensive dictionary of financial and regression metrics.
+    Computes regression and financial metrics.
     """
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
     mae = float(mean_absolute_error(y_true, y_pred))
@@ -56,34 +55,33 @@ def evaluate_predictions(y_true: np.ndarray, y_pred: np.ndarray, y_lag: np.ndarr
     da = calculate_directional_accuracy(y_true, y_pred, y_lag)
     
     return {
-        'RMSE': round(rmse, 4),
-        'MAE': round(mae, 4),
+        'RMSE (₹)': round(rmse, 4),
+        'MAE (₹)': round(mae, 4),
         'MAPE (%)': round(mape, 2),
         'R2_Score': round(r2, 4),
         'Directional_Accuracy (%)': round(da, 2)
     }
 
 
-def prepare_feature_target_split(df: pd.DataFrame, target_col: str = 'Target_Next_Close'):
+def prepare_feature_target_split(df: pd.DataFrame, target_col: str = 'Target_Next_Close', base_price_col: str = 'GOLDBEES'):
     """
-    Extracts feature matrix X, target y, and lag baseline for evaluation.
-    Drops any future lookahead columns.
+    Extracts feature matrix X, target y, and lag baseline.
     """
     target_cols = [c for c in df.columns if c.startswith('Target_')]
     y = df[target_col].copy()
     X = df.drop(columns=target_cols).copy()
-    y_lag = df['GLD'].copy()
+    y_lag = df[base_price_col].copy()
     return X, y, y_lag
 
 
-def run_walk_forward_cv(X: pd.DataFrame, y: pd.Series, y_lag: pd.Series, n_splits: int = 5):
+def run_walk_forward_cv(X: pd.DataFrame, y: pd.Series, y_lag: pd.Series, price_col: str = 'GOLDBEES', n_splits: int = 5):
     """
-    Performs expanding-window TimeSeriesSplit cross validation.
+    Performs expanding-window TimeSeriesSplit cross validation on Indian market data.
     """
-    print(f"\n[Info] Running Walk-Forward Cross Validation ({n_splits} folds)...", flush=True)
+    print(f"\n[Info] Running Indian Market Walk-Forward Cross Validation ({n_splits} folds)...", flush=True)
     tscv = TimeSeriesSplit(n_splits=n_splits)
     
-    models = get_model_instances()
+    models = get_model_instances(price_col=price_col)
     fold_metrics = {name: [] for name in models.keys()}
     fold_metrics['Stacking_Ensemble'] = []
     
@@ -118,7 +116,7 @@ def run_walk_forward_cv(X: pd.DataFrame, y: pd.Series, y_lag: pd.Series, n_split
             avg_metrics[metric_name] = round(float(np.mean([m[metric_name] for m in list_metrics])), 4)
         cv_summary[name] = avg_metrics
         
-    print("\n--- Walk-Forward Cross Validation Summary ---", flush=True)
+    print("\n--- Indian Market Walk-Forward Cross Validation Summary ---", flush=True)
     cv_df = pd.DataFrame(cv_summary).T
     print(cv_df.to_string(), flush=True)
     return cv_df
@@ -126,16 +124,17 @@ def run_walk_forward_cv(X: pd.DataFrame, y: pd.Series, y_lag: pd.Series, n_split
 
 def train_pytorch_lstm(X_train: pd.DataFrame, y_train: pd.Series, 
                        X_test: pd.DataFrame, y_test: pd.Series, 
+                       price_col: str = 'GOLDBEES',
                        seq_len: int = 20, epochs: int = 30, lr: float = 0.001):
     """
-    Trains a deep PyTorch LSTM sequence forecaster on delta changes.
+    Trains PyTorch LSTM sequence forecaster on delta changes.
     """
-    print("\n[Info] Training PyTorch Deep Learning LSTM Model...", flush=True)
+    print(f"\n[Info] Training PyTorch Deep Learning LSTM Model for Indian Market ({price_col})...", flush=True)
     scaler_x = StandardScaler()
     scaler_y = StandardScaler()
     
-    y_delta_train = y_train - X_train['GLD']
-    y_delta_test = y_test - X_test['GLD']
+    y_delta_train = y_train - X_train[price_col]
+    y_delta_test = y_test - X_test[price_col]
     
     X_tr_s = scaler_x.fit_transform(X_train)
     X_te_s = scaler_x.transform(X_test)
@@ -172,7 +171,7 @@ def train_pytorch_lstm(X_train: pd.DataFrame, y_train: pd.Series,
         norm_preds = model(test_inputs).cpu().numpy()
         pred_deltas = scaler_y.inverse_transform(norm_preds.reshape(-1, 1)).flatten()
         
-    price_test_aligned = X_test['GLD'].values[seq_len:]
+    price_test_aligned = X_test[price_col].values[seq_len:]
     preds_price = price_test_aligned + pred_deltas
     y_test_aligned = y_test.values[seq_len:]
     
@@ -186,21 +185,20 @@ def train_pytorch_lstm(X_train: pd.DataFrame, y_train: pd.Series,
     return model, lstm_metrics, preds_price
 
 
-def train_and_export_all_models():
+def train_and_export_all_models(target_name: str = 'GOLDBEES'):
     """
-    End-to-end training pipeline on full and train/test splits,
-    saving production model artifacts to disk.
+    End-to-end training pipeline on full and train/test splits for Indian Gold.
     """
     if not os.path.exists(PROCESSED_DATA_PATH):
-        raw = download_all_market_data()
-        df = prepare_full_features(raw)
+        raw = download_indian_market_data()
+        df = prepare_full_features(raw, target_col=target_name)
     else:
         df = pd.read_csv(PROCESSED_DATA_PATH, index_col=0, parse_dates=True)
         
-    X, y, y_lag = prepare_feature_target_split(df)
+    X, y, y_lag = prepare_feature_target_split(df, target_col='Target_Next_Close', base_price_col=target_name)
     
     # 1. Walk-Forward Cross Validation
-    cv_summary_df = run_walk_forward_cv(X, y, y_lag, n_splits=5)
+    cv_summary_df = run_walk_forward_cv(X, y, y_lag, price_col=target_name, n_splits=5)
     cv_summary_df.to_csv(os.path.join(MODELS_DIR, 'cv_metrics.csv'))
     
     # 2. Train-Test Split (Chronological 85% Train, 15% Holdout Test)
@@ -212,11 +210,11 @@ def train_and_export_all_models():
     with open(os.path.join(MODELS_DIR, 'feature_names.json'), 'w') as f:
         json.dump(list(X.columns), f)
         
-    models = get_model_instances()
+    models = get_model_instances(price_col=target_name)
     test_metrics = {}
     test_predictions = {'Actual': y_test.values.tolist(), 'Date': [d.strftime('%Y-%m-%d') for d in y_test.index]}
     
-    print("\n[Info] Training Final Models on 85% Train and Evaluating on 15% Holdout Test...", flush=True)
+    print("\n[Info] Training Final Indian Market Models on 85% Train and Evaluating on 15% Holdout Test...", flush=True)
     for name, model in models.items():
         model.fit(X_train, y_train)
         preds = model.predict(X_test)
@@ -224,7 +222,7 @@ def train_and_export_all_models():
         test_metrics[name] = metrics
         test_predictions[name] = preds.tolist()
         joblib.dump(model, os.path.join(MODELS_DIR, f'{name.lower()}_model.joblib'))
-        print(f"  ✓ {name}: RMSE={metrics['RMSE']}, MAE={metrics['MAE']}, R2={metrics['R2_Score']}, DirAcc={metrics['Directional_Accuracy (%)']}%", flush=True)
+        print(f"  ✓ {name}: RMSE={metrics['RMSE (₹)']}, MAE={metrics['MAE (₹)']}, R2={metrics['R2_Score']}, DirAcc={metrics['Directional_Accuracy (%)']}%", flush=True)
         
     # Stacking Ensemble
     ensemble = StackingEnsemble(
@@ -238,10 +236,10 @@ def train_and_export_all_models():
     test_metrics['Stacking_Ensemble'] = ens_metrics
     test_predictions['Stacking_Ensemble'] = ens_preds.tolist()
     joblib.dump(ensemble, os.path.join(MODELS_DIR, 'stacking_ensemble.joblib'))
-    print(f"  ✓ Stacking_Ensemble: RMSE={ens_metrics['RMSE']}, MAE={ens_metrics['MAE']}, R2={ens_metrics['R2_Score']}, DirAcc={ens_metrics['Directional_Accuracy (%)']}%", flush=True)
+    print(f"  ✓ Stacking_Ensemble: RMSE={ens_metrics['RMSE (₹)']}, MAE={ens_metrics['MAE (₹)']}, R2={ens_metrics['R2_Score']}, DirAcc={ens_metrics['Directional_Accuracy (%)']}%", flush=True)
     
     # 3. Train PyTorch LSTM
-    lstm_model, lstm_metrics, lstm_preds = train_pytorch_lstm(X_train, y_train, X_test, y_test, seq_len=20)
+    lstm_model, lstm_metrics, lstm_preds = train_pytorch_lstm(X_train, y_train, X_test, y_test, price_col=target_name, seq_len=20)
     test_metrics['PyTorch_LSTM'] = lstm_metrics
     
     padded_lstm = [None] * 20 + lstm_preds.tolist()
@@ -258,7 +256,7 @@ def train_and_export_all_models():
     with open(os.path.join(MODELS_DIR, 'test_predictions.json'), 'w') as f:
         json.dump(test_predictions, f)
         
-    print(f"\n[Success] All models and evaluations successfully saved to {MODELS_DIR}", flush=True)
+    print(f"\n[Success] All Indian Market models successfully saved to {MODELS_DIR}", flush=True)
     return test_metrics
 
 

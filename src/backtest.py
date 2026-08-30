@@ -1,7 +1,6 @@
 """
-Algorithmic Trading Strategy Backtester for Gold Price Predictions.
-Simulates long/cash and long/short strategies based on ML directional signals
-and compares against the standard Buy & Hold benchmark.
+Algorithmic Trading Strategy Backtester for Indian Gold Markets.
+Simulates trading execution on Nippon India ETF Gold BeES (₹) and compares against Buy & Hold.
 """
 
 import os
@@ -17,9 +16,9 @@ if CURR_DIR not in sys.path:
 MODELS_DIR = os.path.join(os.path.dirname(CURR_DIR), 'models')
 
 
-def run_strategy_backtest(allow_short: bool = False, initial_capital: float = 10000.0) -> dict:
+def run_strategy_backtest(allow_short: bool = False, initial_capital_inr: float = 100000.0) -> dict:
     """
-    Simulates ML-driven algorithmic trading on holdout test data.
+    Simulates ML-driven algorithmic trading in INR on holdout test data.
     """
     preds_path = os.path.join(MODELS_DIR, 'test_predictions.json')
     if not os.path.exists(preds_path):
@@ -36,7 +35,7 @@ def run_strategy_backtest(allow_short: bool = False, initial_capital: float = 10
     actual_returns = np.zeros(len(actual_prices))
     actual_returns[1:] = (actual_prices[1:] - actual_prices[:-1]) / actual_prices[:-1]
     
-    # Trading Signals: 1 if predicted next price > current price else 0 (or -1 if short)
+    # Trading Signals
     signals = np.zeros(len(actual_prices))
     for i in range(len(actual_prices) - 1):
         if pred_prices[i] > actual_prices[i]:
@@ -44,31 +43,27 @@ def run_strategy_backtest(allow_short: bool = False, initial_capital: float = 10
         else:
             signals[i + 1] = -1.0 if allow_short else 0.0
             
-    # Strategy Daily Return
     strat_returns = signals * actual_returns
     
-    # Cumulative Curves
-    equity_curve_strategy = initial_capital * np.cumprod(1.0 + strat_returns)
-    equity_curve_benchmark = initial_capital * np.cumprod(1.0 + actual_returns)
+    equity_curve_strategy = initial_capital_inr * np.cumprod(1.0 + strat_returns)
+    equity_curve_benchmark = initial_capital_inr * np.cumprod(1.0 + actual_returns)
     
-    # Performance Statistics
-    total_strat_ret = ((equity_curve_strategy[-1] - initial_capital) / initial_capital) * 100.0
-    total_bench_ret = ((equity_curve_benchmark[-1] - initial_capital) / initial_capital) * 100.0
+    total_strat_ret = ((equity_curve_strategy[-1] - initial_capital_inr) / initial_capital_inr) * 100.0
+    total_bench_ret = ((equity_curve_benchmark[-1] - initial_capital_inr) / initial_capital_inr) * 100.0
     
     n_days = len(actual_prices)
     years = max(n_days / 252.0, 0.1)
     
-    cagr_strat = ((equity_curve_strategy[-1] / initial_capital) ** (1.0 / years) - 1.0) * 100.0
-    cagr_bench = ((equity_curve_benchmark[-1] / initial_capital) ** (1.0 / years) - 1.0) * 100.0
+    cagr_strat = ((equity_curve_strategy[-1] / initial_capital_inr) ** (1.0 / years) - 1.0) * 100.0
+    cagr_bench = ((equity_curve_benchmark[-1] / initial_capital_inr) ** (1.0 / years) - 1.0) * 100.0
     
     strat_vol = np.std(strat_returns) * np.sqrt(252) * 100.0
     bench_vol = np.std(actual_returns) * np.sqrt(252) * 100.0
     
-    rf = 0.02  # 2% risk-free
+    rf = 0.065  # 6.5% Indian Repo / RBI risk-free rate proxy
     sharpe_strat = (cagr_strat / 100.0 - rf) / (strat_vol / 100.0) if strat_vol > 0 else 0.0
     sharpe_bench = (cagr_bench / 100.0 - rf) / (bench_vol / 100.0) if bench_vol > 0 else 0.0
     
-    # Max Drawdown
     def compute_max_drawdown(equity_series):
         peak = np.maximum.accumulate(equity_series)
         drawdown = (equity_series - peak) / peak
@@ -77,12 +72,14 @@ def run_strategy_backtest(allow_short: bool = False, initial_capital: float = 10
     mdd_strat = compute_max_drawdown(equity_curve_strategy)
     mdd_bench = compute_max_drawdown(equity_curve_benchmark)
     
-    # Win rate on active trading days
     active_days = strat_returns != 0
     win_rate = float(np.mean(strat_returns[active_days] > 0) * 100.0) if np.sum(active_days) > 0 else 0.0
     
     results = {
         'Summary': {
+            'Initial_Capital (₹)': initial_capital_inr,
+            'Strategy_Final_Value (₹)': round(float(equity_curve_strategy[-1]), 2),
+            'Benchmark_Final_Value (₹)': round(float(equity_curve_benchmark[-1]), 2),
             'Strategy_Total_Return (%)': round(total_strat_ret, 2),
             'Benchmark_Total_Return (%)': round(total_bench_ret, 2),
             'Strategy_CAGR (%)': round(cagr_strat, 2),
@@ -105,6 +102,6 @@ def run_strategy_backtest(allow_short: bool = False, initial_capital: float = 10
 
 
 if __name__ == '__main__':
-    res = run_strategy_backtest(allow_short=False)
-    print("\nBacktest Summary:")
+    res = run_strategy_backtest(allow_short=False, initial_capital_inr=100000.0)
+    print("\nIndian Market Backtest Summary (₹1 Lakh Capital):")
     print(json.dumps(res['Summary'], indent=2))

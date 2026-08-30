@@ -1,5 +1,5 @@
 """
-Machine Learning and Deep Learning Model Architectures for Gold Price Forecasting.
+Machine Learning and Deep Learning Model Architectures for Indian Gold Price Forecasting.
 Includes Residual/Delta Wrappers for Tree Models, Ridge, PyTorch LSTM/GRU, and Stacking Ensemble.
 """
 
@@ -26,9 +26,9 @@ class ResidualPricePredictor(BaseEstimator, RegressorMixin):
     """
     Financial Time-Series Regressor that predicts price delta (P_{t+1} - P_t).
     Enables tree models (XGBoost, LightGBM, Random Forest) to handle non-stationary
-    trending regimes and all-time-high price extrapolations without bias.
+    trending regimes and all-time-high price extrapolations in INR without bias.
     """
-    def __init__(self, base_estimator: Any, price_col: str = 'GLD'):
+    def __init__(self, base_estimator: Any, price_col: str = 'GOLDBEES'):
         self.base_estimator = base_estimator
         self.price_col = price_col
 
@@ -36,10 +36,8 @@ class ResidualPricePredictor(BaseEstimator, RegressorMixin):
         if isinstance(X, pd.DataFrame) and self.price_col in X.columns:
             current_prices = X[self.price_col]
         else:
-            # Fallback if unscaled numpy array with known column index
             current_prices = X[:, 0] if isinstance(X, np.ndarray) else X[self.price_col]
             
-        # Target is delta change: Delta_P = y - current_price
         y_delta = y - current_prices
         self.base_estimator.fit(X, y_delta)
         return self
@@ -91,9 +89,9 @@ class PyTorchLSTM(nn.Module):
         return out.squeeze(-1)
 
 
-def get_model_instances() -> Dict[str, Any]:
+def get_model_instances(price_col: str = 'GOLDBEES') -> Dict[str, Any]:
     """
-    Returns configured, ready-to-train model instances wrapped with ResidualPricePredictor.
+    Returns configured model instances wrapped with ResidualPricePredictor.
     """
     rf_base = RandomForestRegressor(
         n_estimators=120,
@@ -127,10 +125,10 @@ def get_model_instances() -> Dict[str, Any]:
     ridge_base = Ridge(alpha=10.0)
 
     models = {
-        'Random_Forest': ResidualPricePredictor(rf_base, price_col='GLD'),
-        'XGBoost': ResidualPricePredictor(xgb_base, price_col='GLD'),
-        'LightGBM': ResidualPricePredictor(lgb_base, price_col='GLD'),
-        'Ridge': ResidualPricePredictor(ridge_base, price_col='GLD')
+        'Random_Forest': ResidualPricePredictor(rf_base, price_col=price_col),
+        'XGBoost': ResidualPricePredictor(xgb_base, price_col=price_col),
+        'LightGBM': ResidualPricePredictor(lgb_base, price_col=price_col),
+        'Ridge': ResidualPricePredictor(ridge_base, price_col=price_col)
     }
     return models
 
