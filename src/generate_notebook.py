@@ -1,16 +1,23 @@
-{
+"""
+Script to generate the comprehensive, interactive Jupyter Notebook for Gold Price Prediction.
+"""
+
+import os
+import json
+
+notebook_content = {
  "cells": [
   {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "# \ud83e\ude99 Gold Price Prediction & Quantitative Machine Learning System\n",
+    "# 🪙 Gold Price Prediction & Quantitative Machine Learning System\n",
     "\n",
     "### End-to-End Financial Pipeline: Real-Time Market Data, Feature Engineering, Walk-Forward Validation, and Deep Learning Forecasting\n",
     "\n",
     "---\n",
     "\n",
-    "## \ud83d\udccc Project Overview\n",
+    "## 📌 Project Overview\n",
     "Gold (GLD / Spot Gold) is one of the world's primary safe-haven financial assets, serving as a hedge against inflation, currency debasement, and macroeconomic uncertainty. This project implements a modern, production-grade Machine Learning and Deep Learning system for forecasting Gold prices with:\n",
     "1. **Live Data Ingestion**: Pulling real-time multi-asset market data from 2008 to present via Yahoo Finance.\n",
     "2. **Inter-Market Macro Analysis**: Incorporating S&P 500, Crude Oil, Silver, US Dollar Index (DXY), 10-Year Treasury Yields, CBOE Volatility Index (VIX), and TIPS Inflation-Protected Bonds.\n",
@@ -29,7 +36,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -57,7 +64,7 @@
     "plt.style.use('seaborn-v0_8-darkgrid' if 'seaborn-v0_8-darkgrid' in plt.style.available else 'default')\n",
     "plt.rcParams['figure.figsize'] = (14, 6)\n",
     "plt.rcParams['font.size'] = 11\n",
-    "print('\u2713 Environment and libraries loaded successfully!')"
+    "print('✓ Environment and libraries loaded successfully!')"
    ]
   },
   {
@@ -70,7 +77,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -83,7 +90,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -104,7 +111,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -126,7 +133,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -146,7 +153,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -170,7 +177,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -203,7 +210,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -232,7 +239,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -243,7 +250,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -274,7 +281,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -286,7 +293,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -322,3 +329,12 @@
  "nbformat": 4,
  "nbformat_minor": 2
 }
+
+os.makedirs('notebooks', exist_ok=True)
+with open('notebooks/gold_price_analysis.ipynb', 'w') as f:
+    json.dump(notebook_content, f, indent=1)
+
+with open('gold_price.ipynb', 'w') as f:
+    json.dump(notebook_content, f, indent=1)
+
+print("Generated notebooks/gold_price_analysis.ipynb and updated gold_price.ipynb successfully!")

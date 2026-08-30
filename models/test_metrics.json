@@ -1,0 +1,44 @@
+{
+  "Random_Forest": {
+    "RMSE": 5.9376,
+    "MAE": 4.3374,
+    "MAPE (%)": 1.39,
+    "R2_Score": 0.9951,
+    "Directional_Accuracy (%)": 43.37
+  },
+  "XGBoost": {
+    "RMSE": 5.6957,
+    "MAE": 3.9972,
+    "MAPE (%)": 1.25,
+    "R2_Score": 0.9955,
+    "Directional_Accuracy (%)": 43.07
+  },
+  "LightGBM": {
+    "RMSE": 5.2868,
+    "MAE": 3.47,
+    "MAPE (%)": 1.07,
+    "R2_Score": 0.9961,
+    "Directional_Accuracy (%)": 43.52
+  },
+  "Ridge": {
+    "RMSE": 5.2927,
+    "MAE": 3.4512,
+    "MAPE (%)": 1.05,
+    "R2_Score": 0.9961,
+    "Directional_Accuracy (%)": 46.08
+  },
+  "Stacking_Ensemble": {
+    "RMSE": 5.4961,
+    "MAE": 3.7532,
+    "MAPE (%)": 1.17,
+    "R2_Score": 0.9958,
+    "Directional_Accuracy (%)": 43.22
+  },
+  "PyTorch_LSTM": {
+    "RMSE": 5.7195,
+    "MAE": 3.9585,
+    "MAPE (%)": 1.22,
+    "R2_Score": 0.9953,
+    "Directional_Accuracy (%)": 43.17
+  }
+}
