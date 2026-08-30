@@ -2,6 +2,7 @@
 Indian Gold Price Prediction & Quantitative Forecasting Dashboard.
 Built for the Indian Financial Ecosystem with Streamlit and Plotly.
 Tracks Nippon India ETF Gold BeES (NSE), 10g 24K Gold (₹), USD/INR, NIFTY 50 & SENSEX.
+Includes an interactive AI Quant Assistant & Chatbot.
 """
 
 import os
@@ -25,6 +26,7 @@ from features import prepare_full_features, PROCESSED_DATA_PATH
 from forecast import forecast_future_prices
 from backtest import run_strategy_backtest
 from train import train_and_export_all_models, MODELS_DIR
+from chatbot import GoldAdvisorChatbot
 
 # Set Page Config
 st.set_page_config(
@@ -60,6 +62,20 @@ st.markdown("""
         border-radius: 8px;
         padding: 12px 16px;
         margin-bottom: 12px;
+    }
+    .chat-bubble-user {
+        background-color: #1e293b;
+        border-left: 4px solid #f59e0b;
+        padding: 10px 14px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+    .chat-bubble-ai {
+        background-color: #141c2e;
+        border-left: 4px solid #10b981;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 10px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -107,12 +123,13 @@ def load_test_artifacts():
 
 # --- App Header ---
 st.markdown('<h1 class="gold-header">🇮🇳 Indian Gold Price AI Forecaster & Market Intelligence</h1>', unsafe_allow_html=True)
-st.markdown("Live Multi-Asset Intelligence for Indian Markets • NSE Gold BeES & Spot 24K Gold • Multi-Horizon AI Projections")
+st.markdown("Live Multi-Asset Intelligence for Indian Markets • NSE Gold BeES & Spot 24K Gold • Interactive AI Advisor")
 
 # Load data
 raw_data = load_cached_market_data()
 feat_data = load_cached_features()
 metrics, test_preds, cv_df, feat_imp = load_test_artifacts()
+chatbot = GoldAdvisorChatbot(raw_df=raw_data, feat_df=feat_data)
 
 latest_bees = float(raw_data['GOLDBEES'].iloc[-1])
 prev_bees = float(raw_data['GOLDBEES'].iloc[-2])
@@ -156,7 +173,7 @@ target_view = st.sidebar.selectbox(
 st.sidebar.markdown("---")
 st.sidebar.markdown("### ⚙️ Pipeline Control")
 
-if st.sidebar.button("🔄 Refresh Live Indian Market Data", use_container_width=True):
+if st.sidebar.button("🔄 Refresh Live Indian Market Data", width='stretch'):
     with st.spinner("Downloading live data from NSE, BSE & Yahoo Finance..."):
         download_indian_market_data(force_refresh=True)
         prepare_full_features(load_cached_market_data(), save=True)
@@ -164,7 +181,7 @@ if st.sidebar.button("🔄 Refresh Live Indian Market Data", use_container_width
         st.success("Indian market dataset updated!")
         st.rerun()
 
-if st.sidebar.button("🧠 Retrain All ML & DL Models", use_container_width=True):
+if st.sidebar.button("🧠 Retrain All ML & DL Models", width='stretch'):
     with st.spinner("Training Random Forest, XGBoost, LightGBM, LSTM on Indian Market Data..."):
         train_and_export_all_models()
         st.cache_data.clear()
@@ -176,13 +193,80 @@ st.sidebar.markdown("### 📌 Technology & Data Stack")
 st.sidebar.caption("• Target: GOLDBEES.NS (NSE) & 24K Gold Rate\n• Macro: USD/INR, NIFTY 50, SENSEX, India VIX, Crude\n• Models: LightGBM, XGBoost, PyTorch LSTM, Ensemble\n• Cross-Validation: Walk-Forward Expanding TimeSeriesSplit")
 
 # --- Tabs ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab0, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "💬 Gold AI Advisor (Chatbot)",
     "📈 Indian Market & Technicals",
     "🤖 Model Arena & Benchmark",
     "🔮 Future Price Forecast (₹)",
     "📊 Strategy Backtest (INR)",
     "📚 Indian Market Dynamics"
 ])
+
+# ==========================================
+# TAB 0: AI ADVISOR CHATBOT
+# ==========================================
+with tab0:
+    st.markdown("### 🤖 Ask Gold AI Quant Advisor")
+    st.caption("Ask questions about today's price, buy/sell signals, 7-day/30-day price targets, and market trends.")
+
+    # Initialize chat history in session state
+    if "messages" not in st.session_state:
+        st.session_state.messages = [
+            {
+                "role": "assistant",
+                "content": (
+                    f"Namaste! 🙏 I am your **Indian Gold AI Quant Advisor**.\n\n"
+                    f"Today's **Gold BeES** is trading at **₹{latest_bees:.2f}** (~**₹{latest_10g:,.0f}** per 10g 24K Gold). "
+                    f"How can I assist your gold investments today?\n\n"
+                    f"You can ask me:\n"
+                    f"- *'What is today's gold price?'*\n"
+                    f"- *'Should I buy or sell right now?'*\n"
+                    f"- *'What will be the price next week or next month?'*\n"
+                    f"- *'What are the support and resistance levels?'*\n"
+                    f"- *'How does USD/INR or NIFTY affect gold?'*"
+                )
+            }
+        ]
+
+    # Quick Action Prompt Chips
+    st.markdown("##### ⚡ Quick Questions:")
+    q_col1, q_col2, q_col3, q_col4 = st.columns(4)
+    quick_query = None
+    with q_col1:
+        if st.button("🪙 Today's Price & Rates", width='stretch'):
+            quick_query = "What is today's gold price and 24K rate in India?"
+    with q_col2:
+        if st.button("🎯 Buy / Sell Recommendation", width='stretch'):
+            quick_query = "Should I buy or sell gold right now? What is the signal?"
+    with q_col3:
+        if st.button("🔮 7-Day & 30-Day Forecast", width='stretch'):
+            quick_query = "What is the future price prediction for next 7 days and 30 days?"
+    with q_col4:
+        if st.button("🛡️ Support & Resistance", width='stretch'):
+            quick_query = "What are the key support and resistance levels?"
+
+    # Display chat history
+    chat_container = st.container()
+    with chat_container:
+        for msg in st.session_state.messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+    # Handle user input from quick buttons or text box
+    user_prompt = st.chat_input("Ask a question (e.g. 'Should I buy gold today?', 'Forecast next 14 days')...")
+    active_prompt = quick_query if quick_query else user_prompt
+
+    if active_prompt:
+        st.session_state.messages.append({"role": "user", "content": active_prompt})
+        with st.chat_message("user"):
+            st.markdown(active_prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analyzing real-time technical indicators and model forecasts..."):
+                bot_response = chatbot.generate_response(active_prompt)
+                st.markdown(bot_response)
+                st.session_state.messages.append({"role": "assistant", "content": bot_response})
+
 
 # ==========================================
 # TAB 1: INDIAN MARKET & TECHNICAL ANALYSIS
@@ -240,7 +324,7 @@ with tab1:
         xaxis_rangeslider_visible=False,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
     )
-    st.plotly_chart(fig_price, use_container_width=True)
+    st.plotly_chart(fig_price, width='stretch')
 
     # Momentum Subplots (RSI & MACD)
     col_sub1, col_sub2 = st.columns(2)
@@ -251,7 +335,7 @@ with tab1:
         fig_rsi.add_hline(y=70, line_dash="dash", line_color="#ff5252", annotation_text="Overbought (70)")
         fig_rsi.add_hline(y=30, line_dash="dash", line_color="#00e676", annotation_text="Oversold (30)")
         fig_rsi.update_layout(template='plotly_dark', height=240, margin=dict(l=20, r=20, t=20, b=20), yaxis=dict(range=[10, 90]))
-        st.plotly_chart(fig_rsi, use_container_width=True)
+        st.plotly_chart(fig_rsi, width='stretch')
 
     with col_sub2:
         st.markdown("##### 🌊 MACD Indicator")
@@ -260,7 +344,7 @@ with tab1:
         fig_macd.add_trace(go.Scatter(x=plot_df.index, y=plot_df['MACD_Signal'], line=dict(color='#ff9100', width=1.5), name='Signal'))
         fig_macd.add_trace(go.Bar(x=plot_df.index, y=plot_df['MACD_Diff'], name='Histogram', marker_color='#80cbc4'))
         fig_macd.update_layout(template='plotly_dark', height=240, margin=dict(l=20, r=20, t=20, b=20))
-        st.plotly_chart(fig_macd, use_container_width=True)
+        st.plotly_chart(fig_macd, width='stretch')
 
     # Indian Market Correlation Matrix
     st.markdown("#### 🔥 Indian Multi-Asset Correlation Matrix")
@@ -277,7 +361,7 @@ with tab1:
         title="Domestic Asset Correlation Heatmap (Gold BeES, NIFTY 50, SENSEX, USD/INR, India VIX)"
     )
     fig_corr.update_layout(height=420, margin=dict(l=20, r=20, t=40, b=20))
-    st.plotly_chart(fig_corr, use_container_width=True)
+    st.plotly_chart(fig_corr, width='stretch')
 
 
 # ==========================================
@@ -298,7 +382,7 @@ with tab2:
                 'Directional_Accuracy (%)': '{:.2f}%'
             }).highlight_min(subset=['RMSE (₹)', 'MAE (₹)', 'MAPE (%)'], color='#1b4d3e')
               .highlight_max(subset=['R2_Score', 'Directional_Accuracy (%)'], color='#1b4d3e'),
-            use_container_width=True
+            width='stretch'
         )
 
     if test_preds is not None:
@@ -335,7 +419,7 @@ with tab2:
             margin=dict(l=20, r=20, t=20, b=20),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-        st.plotly_chart(fig_test, use_container_width=True)
+        st.plotly_chart(fig_test, width='stretch')
 
     if feat_imp is not None:
         st.markdown("#### 🧬 Top 20 Most Influential Feature Predictors (XGBoost)")
@@ -352,7 +436,7 @@ with tab2:
             color_continuous_scale='YlOrBr'
         )
         fig_imp.update_layout(yaxis=dict(autorange="reversed"), height=480, margin=dict(l=20, r=20, t=20, b=20))
-        st.plotly_chart(fig_imp, use_container_width=True)
+        st.plotly_chart(fig_imp, width='stretch')
 
 
 # ==========================================
@@ -426,7 +510,7 @@ with tab3:
             margin=dict(l=20, r=20, t=20, b=20),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-        st.plotly_chart(fig_fore, use_container_width=True)
+        st.plotly_chart(fig_fore, width='stretch')
 
     st.markdown("#### 📋 Detailed Day-by-Day Indian Price Projections")
     st.dataframe(
@@ -439,7 +523,7 @@ with tab3:
             'Upper_10g_24K (₹)': '₹{:,.0f}',
             'Expected_Return (%)': '{:+.2f}%'
         }),
-        use_container_width=True
+        width='stretch'
     )
 
 
@@ -483,7 +567,7 @@ with tab4:
             margin=dict(l=20, r=20, t=20, b=20),
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
-        st.plotly_chart(fig_equity, use_container_width=True)
+        st.plotly_chart(fig_equity, width='stretch')
 
 
 # ==========================================
